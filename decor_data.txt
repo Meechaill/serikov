@@ -1,0 +1,8 @@
+﻿Left section length: 5
+Right section length: 5
+
+=== DECOR-LEFT SECTION ===
+[36px]
+
+=== DECOR-RIGHT SECTION ===
+[36px]

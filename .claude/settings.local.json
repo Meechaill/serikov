@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Recurse -File | Where-Object { $_.FullName -notmatch 'node_modules' } | ForEach-Object { $_.FullName.Replace\\('C:\\\\Users\\\\meeck\\\\Desktop\\\\serikov-coffee-site\\\\',''\\) + '  [' + [math]::Round\\($_.Length/1KB\\) + ' KB]' })"
+    ]
+  }
+}

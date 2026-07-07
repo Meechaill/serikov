@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Serikov Coffee</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg">
+    <script src="/assets/mobile-gate.js"></script>
+    <script type="module" crossorigin src="/assets/app.js"></script>
+    <script defer src="/assets/disable-nav-modals.js"></script>
+    <script defer src="/assets/hits.js"></script>
+    <script defer src="/assets/expand.js"></script>
+    <script defer src="/assets/brand-tooltip.js"></script>
+    <script defer src="/assets/journey-stories.js"></script>
+    <script defer src="/assets/request.js"></script>
+    <script defer src="/assets/news.js"></script>
+    <script defer src="/assets/footer.js"></script>
+    <script defer src="/assets/floating-contact.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/app.css">
+    <style>
+      html, body { margin: 0; background: #f8efe0; }
+      /* Макет — фиксированный холст 1440px (#main-container), который приложение
+         само масштабирует на экранах уже 1440px. Но в бандле опечатка:
+         класса md:origin-top-center в Tailwind нет, из-за чего transform-origin
+         остаётся "top left" и макет уезжает влево. Чиним origin здесь. */
+      @media (min-width: 768px) {
+        #main-container { transform-origin: top center !important; }
+      }
+      /* Утилиты для новых составных декоров hero: таких значений не было
+         при сборке Tailwind, поэтому классов нет в app.css. */
+      /* Кнопка «Выбрать идеальный кофе» (секция «путь кофе», шаг 05) —
+         в бандле она прямоугольная, а не со скошенной подложкой, как везде
+         на сайте. Перекрашиваем под общий стиль без правки бандла:
+         прячем фон самой кнопки и подкладываем свой скошенный слой в ::before. */
+      #main-container button[aria-label="Выбрать идеальный кофе"] {
+        position: relative;
+        background: none !important;
+        border-radius: 0 !important;
+        overflow: visible !important;
+      }
+      #main-container button[aria-label="Выбрать идеальный кофе"]::before {
+        content: '';
+        position: absolute;
+        top: 0; bottom: 0;
+        left: 6px;
+        width: calc(100% - 12px);
+        background: #074e2f;
+        border-radius: 20px;
+        transform: skewX(-12.53deg);
+        transition: scale .3s ease;
+        z-index: 0;
+      }
+      #main-container button[aria-label="Выбрать идеальный кофе"]:hover::before {
+        scale: 1.05;
+      }
+      #main-container button[aria-label="Выбрать идеальный кофе"] span {
+        position: relative;
+        z-index: 1;
+      }
+
+      .w-\[786px\] { width: 786px; }
+      .h-\[904px\] { height: 904px; }
+      .left-\[-345px\] { left: -345px; }
+      .left-\[1016px\] { left: 1016px; }
+      /* Масштаб подбирается так, чтобы первый экран (до низа бегущей строки,
+         ~1040px макета) влезал по высоте. Полей по бокам при этом не остаётся:
+         холст расширяется до ширины окна, контент центрируется, а декор,
+         прижатый в макете к краям холста, прижимается к краям окна
+         (логика в скрипте ниже). */
+      @media (min-width: 768px) {
+        #root { zoom: var(--page-zoom, 1); }
+        body { overflow-x: hidden; }
+      }
+
+      /* ===== Закреплённый header =====
+         Header в макете — absolute в холсте 1440px, который масштабируется
+         zoom-ом. position:fixed внутри zoom-а работает: элемент прижимается
+         к viewport, а размеры продолжают масштабироваться вместе с холстом.
+         margin-left, который выставляет скрипт раскладки, гасим !important-ом
+         — центрируем через left:50% + translateX. */
+      @media (min-width: 768px) {
+        /* Бандл вешает на холст identity-transform; даже единичная матрица
+           делает его containing block-ом и «запирает» fixed-header внутри.
+           На десктопе масштаб делаем zoom-ом, transform не нужен. */
+        #main-container { transform: none !important; }
+        #main-container > header {
+          position: fixed !important;
+          top: 20px;
+          left: 50% !important;
+          margin-left: 0 !important;
+          transform: translateX(-50%);
+          transition: top .35s cubic-bezier(.16, 1, .3, 1);
+        }
+        /* Стеклянная капсула: рисуем подложку в ::before с запасом по краям,
+           чтобы контент header не прилипал к её границе. Наверху страницы
+           она полностью прозрачна — header выглядит как в макете. */
+        #main-container > header::before {
+          content: '';
+          position: absolute;
+          inset: -6px -28px;
+          border-radius: 999px;
+          background: rgba(248, 239, 224, 0);
+          border: 1px solid rgba(7, 78, 47, 0);
+          box-shadow: 0 8px 30px rgba(7, 78, 47, 0);
+          -webkit-backdrop-filter: blur(0px);
+          backdrop-filter: blur(0px);
+          z-index: -1;
+          transition: background .35s ease, border-color .35s ease,
+                      box-shadow .35s ease, backdrop-filter .35s ease,
+                      -webkit-backdrop-filter .35s ease;
+        }
+        #main-container > header.hdr-glass { top: 12px; }
+        #main-container > header.hdr-glass::before {
+          background: rgba(248, 239, 224, .93);
+          border-color: rgba(7, 78, 47, .10);
+          box-shadow: 0 10px 34px rgba(7, 78, 47, .14);
+          -webkit-backdrop-filter: blur(14px) saturate(1.25);
+          backdrop-filter: blur(14px) saturate(1.25);
+        }
+      }
+
+      /* ===== Вступительная анимация hero =====
+         Слои появляются каскадом: свет → боковые декоры → зерна и рамка →
+         пачки кофе → заголовок. Анимируем только opacity/translate/scale
+         (отдельные CSS-свойства), потому что transform занят parallax-скриптом
+         ниже — так они работают одновременно и не мешают друг другу.
+         Сами decor-left/right.svg дополнительно анимируются изнутри
+         (поэлементный стаггер зашит в SVG).
+
+         Раньше анимация запускалась сама, как только React успевал вставить
+         картинку с нужным src, — на закешированной странице (обычный F5)
+         это происходило почти мгновенно и часто до того, как пользователь
+         успевал увидеть кадр (плюс браузер иногда восстанавливает прежний
+         скролл при обычной перезагрузке, и hero просто оказывался вне
+         экрана). Поэтому все правила ниже висят под классом .hero-ready,
+         который скрипт ниже ставит на <html> только после полной загрузки
+         страницы (window 'load' + декодированные картинки) и сброса скролла
+         наверх — так сценарий одинаков что на F5, что на Ctrl+F5. */
+      @media not (prefers-reduced-motion: reduce) {
+        /* мягкое «пружинное» замедление */
+        :root { --hero-ease: cubic-bezier(.16, 1, .3, 1); }
+
+        @keyframes heroFade   { from { opacity: 0; } }
+        @keyframes heroFromL  { from { opacity: 0; translate: -36px 10px; scale: .985; } to { translate: 0 0; scale: 1; } }
+        @keyframes heroFromR  { from { opacity: 0; translate: 36px 10px; scale: .985; } to { translate: 0 0; scale: 1; } }
+        @keyframes heroRise   { from { opacity: 0; translate: 0 34px; scale: .97; } to { translate: 0 0; scale: 1; } }
+        @keyframes heroGlow   { from { opacity: 0; scale: .8; } to { scale: 1; } }
+        @keyframes heroDrop   { from { opacity: 0; translate: 0 -18px; } to { translate: 0 0; } }
+        /* едва заметное «дыхание» пачек после появления */
+        @keyframes heroBreath { 50% { translate: 0 -5px; } }
+
+        html:not(.hero-ready) img[src*="images/hero/"] { opacity: 0; }
+        html:not(.hero-ready) #main-container > header { opacity: 0; }
+
+        html.hero-ready img[src*="images/hero/light-blend-left"],
+        html.hero-ready img[src*="images/hero/light-blend-right"] {
+          animation: heroFade 1900ms ease-out both;
+        }
+        html.hero-ready img[src*="images/hero/glow"] {
+          animation: heroGlow 1750ms var(--hero-ease) 200ms both;
+        }
+        html.hero-ready img[src*="images/hero/decor-left.svg"] {
+          animation: heroFromL 1350ms var(--hero-ease) 110ms both;
+        }
+        html.hero-ready img[src*="images/hero/decor-right.svg"] {
+          animation: heroFromR 1350ms var(--hero-ease) 110ms both;
+        }
+        html.hero-ready img[src*="images/hero/decor-left-bottom"] {
+          animation: heroFromL 1280ms var(--hero-ease) 510ms both;
+        }
+        html.hero-ready img[src*="images/hero/beans-left"] {
+          animation: heroFromL 1200ms var(--hero-ease) 680ms both;
+        }
+        html.hero-ready img[src*="images/hero/beans-right"] {
+          animation: heroFromR 1200ms var(--hero-ease) 620ms both;
+        }
+        html.hero-ready img[src*="images/hero/frame-right"] {
+          animation: heroFromR 1280ms var(--hero-ease) 460ms both;
+        }
+        html.hero-ready img[src*="images/hero/coffee-packages"] {
+          animation:
+            heroRise 1350ms var(--hero-ease) 650ms both,
+            heroBreath 7s ease-in-out 4s infinite;
+        }
+
+        /* Header опускается сверху вместе с общим каскадом.
+           Анимируем translate (не transform) — не конфликтует
+           с центрирующим translateX(-50%). */
+        html.hero-ready #main-container > header {
+          animation: heroDrop 1200ms var(--hero-ease) 160ms both;
+        }
+
+        /* ===== Секция «Мы помогаем разным клиентам» =====
+           Появляется по скроллу: скрипт вешает .sec2-prep (прячет элементы)
+           и .sec2-live, когда секция входит в кадр. fill-mode backwards —
+           после конца анимации transform освобождается под 3D-наклон карточек. */
+        @keyframes s2CardDeal {
+          0% { opacity: 0; transform: translateY(90px) rotate(var(--deal, 0deg)) scale(.92); }
+          60% { opacity: 1; }
+          100% { opacity: 1; transform: none; }
+        }
+        @keyframes s2LeafIn {
+          0% { opacity: 0; transform: scale(.4) rotate(var(--leaf, -14deg)); }
+          70% { opacity: 1; transform: scale(1.05) rotate(calc(var(--leaf, -14deg) / -3)); }
+          100% { opacity: 1; transform: none; }
+        }
+        @keyframes s2LeafSway {
+          0%, 100% { transform: rotate(0); }
+          50% { transform: rotate(1.6deg); }
+        }
+
+        .sec2-prep:not(.sec2-live) article,
+        .sec2-prep:not(.sec2-live) > img,
+        .sec2-prep:not(.sec2-live) > section:first-of-type > * { opacity: 0; }
+
+        .sec2-live article { animation: s2CardDeal 850ms var(--hero-ease) backwards; }
+        .sec2-live article:nth-child(1) { --deal: -5deg; animation-delay: 250ms; }
+        .sec2-live article:nth-child(2) { --deal: 3deg;  animation-delay: 400ms; }
+        .sec2-live article:nth-child(3) { --deal: -3deg; animation-delay: 550ms; }
+
+        /* листья по углам «прорастают» и затем едва покачиваются */
+        .sec2-live > img[src*="leaves"] {
+          transform-origin: top center;
+          animation: s2LeafIn 900ms var(--hero-ease) backwards,
+                     s2LeafSway 6s ease-in-out 1.5s infinite;
+        }
+        .sec2-live > img[src*="leaves-top-left"] { --leaf: -16deg; animation-delay: 150ms, 1.5s; }
+        .sec2-live > img[src*="leaves-top-right"] { --leaf: 14deg; animation-delay: 250ms, 2.2s; }
+        .sec2-live > img[src*="glow"] { animation: heroGlow 1200ms var(--hero-ease) 100ms backwards; }
+
+        /* заголовок и подпись секции */
+        .sec2-live > section:first-of-type > * { animation: heroDrop 800ms var(--hero-ease) backwards; }
+        .sec2-live > section:first-of-type > :nth-child(1) { animation-delay: 0ms; }
+        .sec2-live > section:first-of-type > :nth-child(2) { animation-delay: 140ms; }
+
+        .sec2-live article { will-change: transform; }
+
+        /* ===== Секция «Мы проложили путь первыми» =====
+           Классы j-* вешает скрипт: j-prep — на секцию (включает скрытые
+           состояния), j-step/j-head/j-blob — роли, j-l/j-r — с какой стороны
+           элемент, j-in — элемент вошёл в кадр. Дороги по краям
+           прорисовываются по мере скролла (clip-path из скрипта). */
+        @keyframes jFromL { from { opacity: 0; transform: translateX(-70px); } to { opacity: 1; transform: none; } }
+        @keyframes jFromR { from { opacity: 0; transform: translateX(70px); } to { opacity: 1; transform: none; } }
+        @keyframes jNumPop {
+          0% { opacity: 0; transform: scale(.3) rotate(-6deg); }
+          70% { opacity: 1; transform: scale(1.12) rotate(2deg); }
+          100% { opacity: 1; transform: none; }
+        }
+
+        .j-prep .j-step:not(.j-in) > * { opacity: 0; }
+        .j-prep .j-head:not(.j-in) > * { opacity: 0; }
+        .j-prep img.j-blob:not(.j-in) { opacity: 0; }
+
+        .j-step.j-in > .j-l { animation: jFromL 900ms var(--hero-ease) backwards; }
+        .j-step.j-in > .j-r { animation: jFromR 900ms var(--hero-ease) 120ms backwards; }
+        /* внутри текстового блока: номер выпрыгивает, заголовок и абзац — каскадом */
+        .j-step.j-in div[class*="w-[436px]"] > * { animation: heroDrop 700ms var(--hero-ease) backwards; }
+        .j-step.j-in div[class*="w-[436px]"] > :nth-child(1) { animation-name: jNumPop; animation-duration: 800ms; animation-delay: 350ms; }
+        .j-step.j-in div[class*="w-[436px]"] > :nth-child(2) { animation-delay: 480ms; }
+        .j-step.j-in div[class*="w-[436px]"] > :nth-child(3) { animation-delay: 590ms; }
+
+        .j-head.j-in > * { animation: heroDrop 800ms var(--hero-ease) backwards; }
+        .j-head.j-in > :nth-child(2) { animation-delay: 140ms; }
+        .j-head.j-in > :nth-child(3) { animation-delay: 280ms; }
+
+        img.j-blob.j-in { animation: heroGlow 1300ms var(--hero-ease) backwards; }
+
+        /* Тропа «карты сокровищ» и стикер-путешественник (создаются скриптом) */
+        .j-trail { position: absolute; pointer-events: none; z-index: 1; }
+        .j-walker {
+          position: absolute; top: 0; left: 0; width: 120px;
+          z-index: 12; pointer-events: none; will-change: transform;
+          transition: opacity .4s ease;
+        }
+        /* объект-путешественник — просто предмет с мягкой тенью */
+        .j-stage {
+          display: block; width: 118px; height: 118px; object-fit: contain;
+          filter: drop-shadow(0 14px 18px rgba(60, 35, 10, .3));
+        }
+        /* «шлепок»: элемент прилетает и приклеивается с перелётом */
+        @keyframes jSlap {
+          0% { opacity: 0; transform: scale(1.45) rotate(-9deg); }
+          55% { opacity: 1; transform: scale(.94) rotate(3.5deg); }
+          75% { transform: scale(1.03) rotate(-1.5deg); }
+          100% { opacity: 1; transform: scale(1) rotate(0); }
+        }
+        .j-stage.slap { animation: jSlap 550ms var(--hero-ease) both; }
+
+        /* Белые карточки-фото в шагах — «стикеры» на скотче.
+           Точка вращения — у скотча (чуть выше верхнего края): карточку
+           «приносят» (крупнее и выше), прижимают у скотча, и она качается
+           вокруг точки приклейки, затухая, — как настоящее фото на стене.
+           Собственный наклон карточки задан свойством rotate и анимацией
+           не затрагивается. */
+        @keyframes jStick {
+          0%   { opacity: 0; transform: translateY(-46px) scale(1.35) rotate(-9deg); }
+          42%  { opacity: 1; transform: translateY(0) scale(.985) rotate(3.6deg); }
+          58%  { transform: scale(1.005) rotate(-2.4deg); }
+          73%  { transform: rotate(1.4deg); }
+          86%  { transform: rotate(-0.6deg); }
+          100% { opacity: 1; transform: none; }
+        }
+        .j-photo { transform-origin: 50% -8px; }
+        .j-step.j-in .j-photo { animation: jStick 1100ms ease-out 620ms backwards; }
+        /* скотч из макета: пришлёпывается в момент, когда карточку прижали */
+        @keyframes jTapePress {
+          0% { opacity: 0; transform: scale(1.6) rotate(8deg); }
+          60% { opacity: 1; transform: scale(.92) rotate(-2deg); }
+          100% { opacity: 1; transform: none; }
+        }
+        .j-step.j-in .j-tapepress {
+          animation: jTapePress 450ms var(--hero-ease) 1080ms backwards;
+        }
+
+        /* Заголовок и подпись hero — лёгкий каскад сверху */
+        html:not(.hero-ready) section[aria-labelledby="hero-illustration-title"] > * { opacity: 0; }
+        html.hero-ready section[aria-labelledby="hero-illustration-title"] > * {
+          animation: heroDrop 1200ms var(--hero-ease) both;
+        }
+        html.hero-ready section[aria-labelledby="hero-illustration-title"] > :nth-child(1) { animation-delay: 260ms; }
+        html.hero-ready section[aria-labelledby="hero-illustration-title"] > :nth-child(2) { animation-delay: 440ms; }
+        html.hero-ready section[aria-labelledby="hero-illustration-title"] > :nth-child(3) { animation-delay: 620ms; }
+        html.hero-ready section[aria-labelledby="hero-illustration-title"] > :nth-child(4) { animation-delay: 800ms; }
+      }
+    </style>
+    <script>
+      // Пуск hero-анимации: ставит .hero-ready на <html>, когда сайт
+      // ДЕЙСТВИТЕЛЬНО готов к показу — сработавшее окно 'load' (все сетевые
+      // запросы initial-документа завершены) плюс декодированные картинки
+      // hero, плюс два кадра рендера про запас. До этого момента все hero-
+      // элементы держатся невидимыми через html:not(.hero-ready) выше —
+      // так анимация всегда стартует с чистого места, а не «когда придётся».
+      // history.scrollRestoration ставим в manual и сбрасываем скролл наверх
+      // сразу же: иначе обычный F5 (в отличие от Ctrl+F5) в большинстве
+      // браузеров восстанавливает прежнюю позицию скролла, и пользователь
+      // просто не видит hero в кадре в момент, когда тот анимируется.
+      (function () {
+        if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+        window.scrollTo(0, 0);
+
+        // decor-left.svg/decor-right.svg несут СВОЮ анимацию внутри файла
+        // (её @keyframes встроены в сам SVG) — она проигрывает элементы
+        // по отдельности. Это отдельный таймлайн, привязанный к моменту,
+        // когда браузер реально ЗАГРУЖАЕТ SVG-документ. При обычном F5
+        // браузер отдаёт картинку из кеша без повторной загрузки — таймлайн
+        // SVG не перезапускается, и внутренняя анимация просто не играет
+        // (хотя внешние heroFromL/R на самой <img> всё равно срабатывают).
+        // Добавляем к src метку времени — так каждая загрузка страницы
+        // считается для браузера новым запросом и внутренняя анимация SVG
+        // стартует заново, независимо от F5/Ctrl+F5.
+        var CACHE_BUST = String(Date.now());
+        var bustedDecor = false;
+        function bustDecorSvgs() {
+          if (bustedDecor) return;
+          var imgs = document.querySelectorAll(
+            'img[src*="images/hero/decor-left.svg"], img[src*="images/hero/decor-right.svg"]'
+          );
+          if (!imgs.length) return;
+          bustedDecor = true;
+          imgs.forEach(function (img) {
+            img.src = img.src.split('?')[0] + '?r=' + CACHE_BUST;
+          });
+        }
+
+        function heroImagesReady() {
+          var imgs = document.querySelectorAll('img[src*="images/hero/"]');
+          if (!imgs.length) return false;
+          for (var i = 0; i < imgs.length; i++) if (!imgs[i].complete) return false;
+          return true;
+        }
+
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          window.scrollTo(0, 0);
+          // два rAF — даём браузеру дорисовать текущий кадр перед стартом
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              document.documentElement.classList.add('hero-ready');
+            });
+          });
+        }
+
+        var loaded = document.readyState === 'complete';
+        if (!loaded) window.addEventListener('load', function () { loaded = true; poll(); });
+
+        var tries = 0;
+        function poll() {
+          bustDecorSvgs();
+          if ((loaded && bustedDecor && heroImagesReady()) || ++tries > 100) { start(); return; }
+          setTimeout(poll, 50);
+        }
+        poll();
+      })();
+    </script>
+    <script>
+      (function () {
+        var DESIGN_W = 1440;     // ширина холста макета
+        var FIRST_SCREEN = 1040; // высота первого экрана в макете
+        var docEl = document.documentElement;
+        var cache = new WeakMap(); // исходная геометрия элементов (в координатах макета)
+
+        function metrics(el) {
+          var m = cache.get(el);
+          if (!m) {
+            m = { L: el.offsetLeft, W: el.offsetWidth };
+            m.R = m.L + m.W;
+            // не кешируем ещё не отрисованные элементы (например, img без
+            // CSS-размеров до загрузки) — иначе запомним нулевую геометрию
+            if (m.W > 0) cache.set(el, m);
+          }
+          return m;
+        }
+
+        // Полноэкранный блок считаем «контейнером» и заходим внутрь,
+        // если в нём есть абсолютные или полноэкранные дети (секции каталога,
+        // «пути кофе»); иначе просто растягиваем (эллипс, бегущая строка).
+        function isContainer(el, m) {
+          if (el.tagName === 'IMG' || m.W > 1500) return false;
+          for (var i = 0; i < el.children.length; i++) {
+            var ch = el.children[i];
+            if (!(ch instanceof HTMLElement)) continue;
+            if (getComputedStyle(ch).position === 'absolute') return true;
+            var cm = metrics(ch);
+            if (cm.L <= 30 && cm.R >= 1410) return true;
+          }
+          return false;
+        }
+
+        // Бегущей строке при растяжении может не хватить запаса контента —
+        // дублируем содержимое, чтобы цикл анимации оставался бесшовным.
+        function fillMarquee(el, bandW) {
+          var row = el.querySelector('.animate-marquee-slow');
+          if (!row) return;
+          var guard = 0;
+          while (row.scrollWidth < 2 * bandW && guard++ < 3) {
+            var kids = Array.prototype.slice.call(row.children);
+            for (var k = 0; k < kids.length; k++) row.appendChild(kids[k].cloneNode(true));
+          }
+        }
+
+        // d — на сколько «раздвинулось» каждое поле относительно макета 1440px.
+        // Сдвиги делаем margin-ами, а не transform-ами: transform на предке
+        // сломал бы position:fixed у модалки заказа.
+        function apply(container, d) {
+          for (var i = 0; i < container.children.length; i++) {
+            var el = container.children[i];
+            if (!(el instanceof HTMLElement)) continue;
+            var s = getComputedStyle(el);
+            var m = metrics(el);
+            // спозиционирован через right — прижмётся к краю сам
+            if (s.position === 'absolute' && s.left === 'auto') continue;
+            // left: calc(50% - X) — центрируется сам при расширении холста
+            // (классом Tailwind или inline-стилем, как секция «Хиты продаж»)
+            if (/left-\[calc\(50/.test((el.className || '').toString()) ||
+                (el.style.left || '').indexOf('calc') !== -1) { el.style.marginLeft = ''; continue; }
+            if (m.L <= 30 && m.R >= 1410 && el.tagName !== 'IMG') {
+              // Во всю ширину холста: left не трогаем — расширяем вправо на 2d,
+              // тогда исходные свесы за края холста сохраняются с обеих сторон.
+              el.style.width = (m.W + 2 * d) + 'px';
+              if (isContainer(el, m)) apply(el, d);
+              else fillMarquee(el, m.W + 2 * d);
+              continue;
+            }
+            if (m.L <= 30 || (m.R < 720 && m.L <= 80)) continue;                         // прижат к левому краю
+            if (m.R >= 1410 || (m.L > 720 && m.R >= 1360)) { el.style.marginLeft = (2 * d) + 'px'; continue; } // к правому краю
+            el.style.marginLeft = d + 'px';                                              // центрированный контент
+          }
+        }
+
+        function fit() {
+          var w = docEl.clientWidth;
+          var h = window.innerHeight;
+          var canvas = document.getElementById('main-container');
+          if (w < 768) { // мобильная зона — не вмешиваемся
+            docEl.style.setProperty('--page-zoom', 1);
+            window.__layoutWidth = 0;
+            if (canvas) { canvas.style.width = ''; apply(canvas, 0); }
+            return;
+          }
+          var zoom = Math.max(Math.min(w / DESIGN_W, h / FIRST_SCREEN), 0.55);
+          docEl.style.setProperty('--page-zoom', zoom);
+          var layoutW = Math.max(w / zoom, DESIGN_W);
+          // сообщаем бандлу ширину макета, чтобы его собственный scale не включался
+          window.__layoutWidth = layoutW;
+          if (!canvas) return;
+          canvas.style.width = layoutW + 'px';
+          apply(canvas, (layoutW - DESIGN_W) / 2);
+        }
+
+        function boot() { // ждём, пока React отрисует #main-container
+          // (MutationObserver, а не rAF: rAF заморожен в фоновых вкладках)
+          if (document.getElementById('main-container')) { fit(); return; }
+          var mo = new MutationObserver(function () {
+            if (document.getElementById('main-container')) { mo.disconnect(); fit(); }
+          });
+          mo.observe(document.getElementById('root') || document.body, { childList: true, subtree: true });
+        }
+        window.addEventListener('resize', fit);
+        window.addEventListener('load', fit); // пересчёт, когда загрузились все картинки
+        // ResizeObserver ловит и появление скроллбара, которое не даёт события resize
+        new ResizeObserver(fit).observe(docEl);
+        fit();  // зум и __layoutWidth нужны ещё до монтирования приложения
+        boot();
+      })();
+    </script>
+    <script>
+      // Стеклянная подложка закреплённого header: появляется, как только
+      // страница проскроллена дальше первых ~40px.
+      (function () {
+        var header = null;
+        function onScroll() {
+          if (!header) header = document.querySelector('#main-container > header');
+          if (!header) return;
+          header.classList.toggle('hdr-glass', window.scrollY > 40);
+        }
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('load', onScroll);
+      })();
+    </script>
+    <script>
+      // Секция «Мы помогаем разным клиентам»: запуск входной анимации по
+      // скроллу + интерактивный 3D-наклон карточек за курсором.
+      (function () {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+        var wrap = null;
+
+        function initTilt(article) {
+          // текущие значения и цели: наклон (rx/ry) и подъём (lift) —
+          // всё догоняет цель через lerp, ничего не меняется скачком
+          var rx = 0, ry = 0, lift = 0, tx = 0, ty = 0, tl = 0, raf = null;
+          function frame() {
+            raf = null;
+            rx += (tx - rx) * 0.07;
+            ry += (ty - ry) * 0.07;
+            lift += (tl - lift) * 0.07;
+            if (Math.abs(tx - rx) < 0.02 && Math.abs(ty - ry) < 0.02 &&
+                Math.abs(tl - lift) < 0.02 && tl === 0) {
+              article.style.transform = '';
+              return;
+            }
+            article.style.transform =
+              'perspective(1100px) rotateX(' + rx.toFixed(2) + 'deg) rotateY(' + ry.toFixed(2) + 'deg)' +
+              ' translateY(' + (-lift).toFixed(2) + 'px)';
+            raf = requestAnimationFrame(frame);
+          }
+          function schedule() { if (!raf) raf = requestAnimationFrame(frame); }
+          article.addEventListener('pointermove', function (e) {
+            var r = article.getBoundingClientRect();
+            // -1..1 от центра карточки; наклон максимум ~6°
+            ty = ((e.clientX - r.left) / r.width - 0.5) * 2 * 6;
+            tx = -((e.clientY - r.top) / r.height - 0.5) * 2 * 6;
+            tl = 5;
+            schedule();
+          });
+          article.addEventListener('pointerleave', function () {
+            tx = 0; ty = 0; tl = 0;
+            schedule();
+          });
+        }
+
+        function boot() {
+          wrap = document.querySelector('#main-container .mt-\\[-102px\\]');
+          if (!wrap) { setTimeout(boot, 300); return; }
+          wrap.classList.add('sec2-prep');
+          // Проверка по позиции, а не IntersectionObserver: наблюдатель молчит
+          // в некоторых webview, а секция до запуска анимации скрыта — цена
+          // ошибки слишком высока. Запускаем, когда верх секции поднялся
+          // до 80% высоты окна.
+          function check() {
+            if (wrap.getBoundingClientRect().top < window.innerHeight * 0.8) {
+              wrap.classList.add('sec2-live');
+              window.removeEventListener('scroll', check);
+              window.removeEventListener('resize', check);
+              clearInterval(iv);
+            }
+          }
+          window.addEventListener('scroll', check, { passive: true });
+          window.addEventListener('resize', check);
+          // страховка: в webview scroll-событие при программном скролле
+          // может не прийти — опрашиваем позицию, пока секция не показана
+          var iv = setInterval(check, 400);
+          check();
+          wrap.querySelectorAll('article').forEach(initTilt);
+        }
+        boot();
+      })();
+    </script>
+    <script>
+      // Секция «Мы проложили путь первыми»: шаги 01–05 въезжают со своих
+      // сторон при скролле, а дороги по краям «прокладываются» по мере
+      // движения по секции (clip-path снизу, с плавным догонянием).
+      (function () {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+        function boot() {
+          var sec = null;
+          document.querySelectorAll('#main-container > section').forEach(function (s) {
+            if (!sec && (s.className || '').toString().indexOf('top-[2092px]') !== -1) sec = s;
+          });
+          if (!sec) { setTimeout(boot, 300); return; }
+
+          var blobs = sec.querySelectorAll('img[src*="decor-blob"]');
+          blobs.forEach(function (b) { b.classList.add('j-blob'); });
+
+          var steps = [];
+          sec.querySelectorAll(':scope > section').forEach(function (st) {
+            var r = st.getBoundingClientRect();
+            if (st.querySelector('h2, p') && /^\s*0\d/.test(st.textContent)) {
+              st.classList.add('j-step');
+              // раздаём детям сторону по положению их центра относительно шага
+              var mid = r.left + r.width / 2;
+              for (var i = 0; i < st.children.length; i++) {
+                var c = st.children[i], cr = c.getBoundingClientRect();
+                c.classList.add(cr.left + cr.width / 2 < mid ? 'j-l' : 'j-r');
+              }
+              steps.push(st);
+            } else if (/МЫ ПРОЛОЖИЛИ/.test(st.textContent)) {
+              st.classList.add('j-head');
+              steps.push(st);
+            }
+          });
+          sec.classList.add('j-prep');
+
+          /* === Тропа «карты сокровищ» по центральному коридору === */
+          var SEC_H = 3090;                   // высота секции в макетных px
+          var T_TOP = 330, T_W = 420, T_H = 2470; // положение тропы в секции
+          // опорные точки: плавная змейка вокруг центра коридора
+          var pts = [], N = 10;
+          for (var i = 0; i <= N; i++) {
+            var edge = (i === 0 || i === N) ? 0.35 : 1; // концы ближе к центру
+            pts.push([210 + Math.sin(i * 1.25) * 82 * edge, Math.round(i * T_H / N)]);
+          }
+          var d = 'M' + pts[0][0].toFixed(1) + ' ' + pts[0][1];
+          for (var i = 1; i < N; i++) {
+            var mx = ((pts[i][0] + pts[i + 1][0]) / 2).toFixed(1);
+            var my = ((pts[i][1] + pts[i + 1][1]) / 2).toFixed(1);
+            d += ' Q' + pts[i][0].toFixed(1) + ' ' + pts[i][1] + ' ' + mx + ' ' + my;
+          }
+          var ex = pts[N][0], ey = pts[N][1];
+          d += ' L' + ex.toFixed(1) + ' ' + ey;
+
+          var trail = document.createElement('div');
+          trail.className = 'j-trail';
+          trail.style.cssText = 'top:' + T_TOP + 'px;left:calc(50% - ' + (T_W / 2) +
+            'px);width:' + T_W + 'px;height:' + (T_H + 60) + 'px;';
+          trail.innerHTML =
+            '<svg width="' + T_W + '" height="' + (T_H + 60) + '" viewBox="0 0 ' + T_W + ' ' + (T_H + 60) + '" fill="none">' +
+            '<path class="j-path" d="' + d + '" stroke="#8a5a33" stroke-width="5" ' +
+            'stroke-linecap="round" stroke-dasharray="15 19" opacity=".7"/>' +
+            // «X marks the spot» в конце тропы
+            '<g stroke="#ab1b3f" stroke-width="9" stroke-linecap="round" opacity=".85">' +
+            '<line x1="' + (ex - 19) + '" y1="' + (ey + 8) + '" x2="' + (ex + 19) + '" y2="' + (ey + 44) + '"/>' +
+            '<line x1="' + (ex + 19) + '" y1="' + (ey + 8) + '" x2="' + (ex - 19) + '" y2="' + (ey + 44) + '"/></g></svg>';
+          sec.appendChild(trail);
+          var pathEl = trail.querySelector('.j-path');
+          var pathLen = pathEl.getTotalLength();
+
+          /* === Стикер, едущий по тропе === */
+          var walker = document.createElement('div');
+          walker.className = 'j-walker';
+          // та же система координат, что у тропы (50% ширины секции = центр окна,
+          // секция растянута скриптом раскладки на всю ширину холста)
+          walker.style.left = 'calc(50% - ' + (T_W / 2) + 'px)';
+          walker.style.top = T_TOP + 'px';
+          walker.style.opacity = '0';
+          walker.innerHTML = '<img class="j-stage" alt="Этап пути кофе">';
+          sec.appendChild(walker);
+          var stImg = walker.firstChild;
+          var stage = -1, pv = 0;
+          // предзагрузка всех этапов, чтобы смена была мгновенной
+          for (var i = 1; i <= 4; i++) (new Image()).src = '/assets/images/journey/Rectangle-' + i + '.png';
+
+          function setStage(idx) {
+            if (idx === stage) return;
+            stage = idx;
+            stImg.src = '/assets/images/journey/Rectangle-' + (idx + 1) + '.png';
+            stImg.classList.remove('slap');
+            void stImg.offsetWidth; // перезапуск анимации смены предмета
+            stImg.classList.add('slap');
+          }
+
+          /* === Карточки-фото как «стикеры» ===
+             Скотч уже есть в макете (оранжевая плашка), анимируем только
+             белую карточку-обёртку целиком. */
+          steps.forEach(function (st) {
+            st.querySelectorAll('img').forEach(function (img) {
+              if (!/(-photo|-card)\.(png|jpg|svg)/.test(img.getAttribute('src') || '')) return;
+              var card = img.closest('div[class*="bg-[#fffdf6]"]') || img;
+              card.classList.add('j-photo');
+            });
+            // цветные плашки-скотчи лежат рядом с карточками, а не внутри
+            st.querySelectorAll('div').forEach(function (d) {
+              if (/bg-\[#(f47822|00a9bb|ab1b3f)cc\]/.test((d.className || '').toString()))
+                d.classList.add('j-tapepress');
+            });
+          });
+
+          var pending = steps.concat(Array.prototype.slice.call(blobs));
+
+          function tick() {
+            var vh = window.innerHeight;
+            for (var i = pending.length - 1; i >= 0; i--) {
+              if (pending[i].getBoundingClientRect().top < vh * 0.82) {
+                pending[i].classList.add('j-in');
+                pending.splice(i, 1);
+              }
+            }
+            var r = sec.getBoundingClientRect();
+            var scale = r.height / SEC_H;
+            // стикер держится чуть выше середины экрана; всё в макетных px
+            var yWant = (vh * 0.52 - r.top) / scale - T_TOP;
+            var target = Math.max(0, Math.min(1, yWant / T_H));
+            pv += (target - pv) * 0.09;
+            var pt = pathEl.getPointAtLength(pv * pathLen);
+            var pt2 = pathEl.getPointAtLength(Math.min(pathLen, pv * pathLen + 2));
+            // лёгкий крен по касательной тропы, не больше ~8°
+            var ang = (Math.atan2(pt2.y - pt.y, pt2.x - pt.x) - Math.PI / 2) * 57.3 * 0.45;
+            ang = Math.max(-8, Math.min(8, ang));
+            walker.style.transform = 'translate(' + (pt.x - 60).toFixed(1) + 'px,' +
+              (pt.y - 62).toFixed(1) + 'px) rotate(' + ang.toFixed(2) + 'deg)';
+            walker.style.opacity = pv > 0.004 ? '1' : '0';
+            // тропа прорисована чуть дальше стикера
+            trail.style.clipPath = 'inset(0 0 ' + Math.max(0, (1 - pv - 0.08) * 100).toFixed(2) + '% 0)';
+            setStage(Math.min(3, Math.floor(pv * 4)));
+            requestAnimationFrame(tick);
+          }
+          requestAnimationFrame(tick);
+        }
+        boot();
+      })();
+    </script>
+    <script>
+      // «Живая сцена» hero: слои инерционно плывут за курсором на пружине
+      // (с запаздыванием и лёгким доворотом) и постоянно едва заметно
+      // дрейфуют по Лиссажу, даже когда мышь неподвижна. Используем только
+      // transform — вступительные анимации построены на translate/scale
+      // (отдельных свойствах), поэтому эффекты не конфликтуют.
+      (function () {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+        // depth — амплитуда движения к курсору (px при курсоре у края окна),
+        // rot — максимальный доворот (deg), amp/speed — амбиентный дрейф.
+        var LAYERS = [
+          { match: /light-blend-/,        depth: 4,  rot: 0,   amp: 0,   speed: 0 },
+          { match: /decor-(left|right)\.svg/, depth: 7,  rot: 0.4, amp: 2.5, speed: 0.11 },
+          { match: /decor-left-bottom/,   depth: 10, rot: 0.7, amp: 3,   speed: 0.14 },
+          { match: /beans-(left|right)/,  depth: 13, rot: 1.2, amp: 4,   speed: 0.18 },
+          { match: /frame-right/,         depth: 11, rot: 0.8, amp: 3,   speed: 0.13 },
+          { match: /coffee-packages/,     depth: 6,  rot: 0,   amp: 0,   speed: 0 },
+          { match: /hero\/glow/,          depth: 3,  rot: 0,   amp: 0,   speed: 0 },
+          // секция «путь»: совсем деликатно, чтобы не была статичной
+          { match: /decor-blob-/,         depth: 6,  rot: 0,   amp: 2.5, speed: 0.09 },
+          { match: /journey\/.*-illustration/, depth: 4, rot: 0, amp: 0, speed: 0 },
+        ];
+
+        var targets = [];
+        var pointer = { x: 0, y: 0 };   // цель, -1..1 от центра окна
+        var seen = false;               // курсор уже появлялся над страницей
+
+        function collect() {
+          var imgs = document.querySelectorAll('#main-container img');
+          targets = [];
+          for (var i = 0; i < imgs.length; i++) {
+            var src = imgs[i].getAttribute('src') || '';
+            for (var j = 0; j < LAYERS.length; j++) {
+              if (LAYERS[j].match.test(src)) {
+                targets.push({
+                  el: imgs[i], cfg: LAYERS[j],
+                  x: 0, y: 0, vx: 0, vy: 0,        // пружина: позиция + скорость
+                  phase: (i * 2.399) % 6.283        // разбег фаз дрейфа (золотой угол)
+                });
+                break;
+              }
+            }
+          }
+        }
+
+        var last = performance.now();
+        var lastCollect = 0;
+        function loop(now) {
+          // React мог смонтировать hero позже нас — добираем слои, пока их нет
+          if (!targets.length && now - lastCollect > 500) { lastCollect = now; collect(); }
+          var dt = Math.min((now - last) / 1000, 0.05);
+          last = now;
+          var t = now / 1000;
+          for (var i = 0; i < targets.length; i++) {
+            var o = targets[i], c = o.cfg;
+            // мягкая недодемпфированная пружина — слой «доплывает» с инерцией
+            var k = 22, damp = 9.5;
+            var ax = (pointer.x * c.depth - o.x) * k - o.vx * damp;
+            var ay = (pointer.y * c.depth - o.y) * k - o.vy * damp;
+            o.vx += ax * dt; o.vy += ay * dt;
+            o.x += o.vx * dt; o.y += o.vy * dt;
+            // амбиентный дрейф: замкнутая кривая, у каждого слоя своя фаза
+            var dx = 0, dy = 0;
+            if (c.amp) {
+              dx = Math.sin(t * c.speed * 6.283 + o.phase) * c.amp;
+              dy = Math.cos(t * c.speed * 6.283 * 0.7 + o.phase * 1.7) * c.amp * 0.8;
+            }
+            var rot = c.rot ? (o.x / c.depth) * c.rot : 0;
+            o.el.style.transform = 'translate3d(' + (o.x + dx).toFixed(2) + 'px,' +
+              (o.y + dy).toFixed(2) + 'px,0)' + (rot ? ' rotate(' + rot.toFixed(3) + 'deg)' : '');
+          }
+          requestAnimationFrame(loop);
+        }
+
+        window.addEventListener('pointermove', function (e) {
+          pointer.x = (e.clientX / window.innerWidth - 0.5) * 2;
+          pointer.y = (e.clientY / window.innerHeight - 0.5) * 2;
+          if (!seen) { seen = true; collect(); }
+        }, { passive: true });
+
+        document.addEventListener('pointerleave', function () {
+          pointer.x = 0; pointer.y = 0; // сцена плавно возвращается на пружине
+        });
+
+        // дрейф должен идти и до первого движения мыши
+        window.addEventListener('load', function () {
+          if (!targets.length) collect();
+        });
+        requestAnimationFrame(function (now) { last = now; requestAnimationFrame(loop); });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
