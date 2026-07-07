@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>PNG Position Finder</title>
+</head>
+<body>
+<div id="status">Loading...</div>
+<canvas id="svgCanvas" style="display:none"></canvas>
+<canvas id="pngCanvas" style="display:none"></canvas>
+<pre id="output"></pre>
+<script>
+async function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+async function findPositions(svgSrc, svgW, svgH, pngDir, pngFiles) {
+  const status = document.getElementById('status');
+  const output = document.getElementById('output');
+  
+  // Render SVG
+  status.textContent = 'Rendering SVG...';
+  const svgImg = await loadImage(svgSrc);
+  const svgCanvas = document.getElementById('svgCanvas');
+  svgCanvas.width = svgW;
+  svgCanvas.height = svgH;
+  const svgCtx = svgCanvas.getContext('2d');
+  svgCtx.drawImage(svgImg, 0, 0, svgW, svgH);
+  const svgData = svgCtx.getImageData(0, 0, svgW, svgH);
+  
+  const results = [];
+  
+  for (const pngFile of pngFiles) {
+    status.textContent = 'Processing ' + pngFile + '...';
+    const pngImg = await loadImage(pngDir + '/' + encodeURIComponent(pngFile));
+    const pw = pngImg.naturalWidth;
+    const ph = pngImg.naturalHeight;
+    
+    const pngCanvas = document.getElementById('pngCanvas');
+    pngCanvas.width = pw;
+    pngCanvas.height = ph;
+    const pngCtx = pngCanvas.getContext('2d');
+    pngCtx.clearRect(0, 0, pw, ph);
+    pngCtx.drawImage(pngImg, 0, 0);
+    const pngData = pngCtx.getImageData(0, 0, pw, ph);
+    
+    // Find the center of mass of opaque pixels in PNG
+    let pngCx = 0, pngCy = 0, pngCount = 0;
+    for (let y = 0; y < ph; y++) {
+      for (let x = 0; x < pw; x++) {
+        const a = pngData.data[(y * pw + x) * 4 + 3];
+        if (a > 128) {
+          pngCx += x; pngCy += y; pngCount++;
+        }
+      }
+    }
+    if (pngCount === 0) {
+      results.push({ file: pngFile, x: 0, y: 0, w: pw, h: ph, note: 'empty' });
+      continue;
+    }
+    pngCx /= pngCount;
+    pngCy /= pngCount;
+    
+    // Get dominant color of PNG (most common non-transparent color)
+    const colorMap = {};
+    for (let y = 0; y < ph; y++) {
+      for (let x = 0; x < pw; x++) {
+        const idx = (y * pw + x) * 4;
+        const a = pngData.data[idx + 3];
+        if (a > 200) {
+          const key = pngData.data[idx] + ',' + pngData.data[idx+1] + ',' + pngData.data[idx+2];
+          colorMap[key] = (colorMap[key] || 0) + 1;
+        }
+      }
+    }
+    let dominantColor = null, maxCount = 0;
+    for (const [key, count] of Object.entries(colorMap)) {
+      if (count > maxCount) { maxCount = count; dominantColor = key; }
+    }
+    
+    // Search for best position by template matching
+    // Use a sparse sampling approach for speed
+    let bestX = 0, bestY = 0, bestScore = -1;
+    
+    // Collect a sample of opaque PNG pixels
+    const samplePixels = [];
+    const step = Math.max(1, Math.floor(Math.sqrt(pngCount / 200)));
+    for (let y = 0; y < ph; y += step) {
+      for (let x = 0; x < pw; x += step) {
+        const idx = (y * pw + x) * 4;
+        if (pngData.data[idx + 3] > 200) {
+          samplePixels.push({
+            x, y,
+            r: pngData.data[idx],
+            g: pngData.data[idx + 1],
+            b: pngData.data[idx + 2]
+          });
+        }
+      }
+    }
+    
+    // Search area: the PNG could be positioned anywhere in the SVG
+    // including partially outside (negative offsets)
+    const searchMinX = -pw + 10;
+    const searchMaxX = svgW - 10;
+    const searchMinY = -ph + 10;
+    const searchMaxY = svgH - 10;
+    
+    // Coarse search first
+    const coarseStep = 4;
+    for (let oy = searchMinY; oy <= searchMaxY; oy += coarseStep) {
+      for (let ox = searchMinX; ox <= searchMaxX; ox += coarseStep) {
+        let score = 0;
+        let checked = 0;
+        for (const sp of samplePixels) {
+          const sx = ox + sp.x;
+          const sy = oy + sp.y;
+          if (sx < 0 || sx >= svgW || sy < 0 || sy >= svgH) continue;
+          checked++;
+          const idx = (sy * svgW + sx) * 4;
+          const dr = Math.abs(svgData.data[idx] - sp.r);
+          const dg = Math.abs(svgData.data[idx + 1] - sp.g);
+          const db = Math.abs(svgData.data[idx + 2] - sp.b);
+          if (dr + dg + db < 30) score++;
+        }
+        if (checked > samplePixels.length * 0.3 && score > bestScore) {
+          bestScore = score;
+          bestX = ox;
+          bestY = oy;
+        }
+      }
+    }
+    
+    // Fine search around best coarse position
+    const fineRange = coarseStep + 2;
+    for (let oy = bestY - fineRange; oy <= bestY + fineRange; oy++) {
+      for (let ox = bestX - fineRange; ox <= bestX + fineRange; ox++) {
+        let score = 0;
+        let checked = 0;
+        for (const sp of samplePixels) {
+          const sx = ox + sp.x;
+          const sy = oy + sp.y;
+          if (sx < 0 || sx >= svgW || sy < 0 || sy >= svgH) continue;
+          checked++;
+          const idx = (sy * svgW + sx) * 4;
+          const dr = Math.abs(svgData.data[idx] - sp.r);
+          const dg = Math.abs(svgData.data[idx + 1] - sp.g);
+          const db = Math.abs(svgData.data[idx + 2] - sp.b);
+          if (dr + dg + db < 20) score++;
+        }
+        if (checked > samplePixels.length * 0.3 && score > bestScore) {
+          bestScore = score;
+          bestX = ox;
+          bestY = oy;
+        }
+      }
+    }
+    
+    const matchPct = samplePixels.length > 0 ? Math.round(bestScore / samplePixels.length * 100) : 0;
+    results.push({ file: pngFile, x: bestX, y: bestY, w: pw, h: ph, score: bestScore, samples: samplePixels.length, matchPct, dominantColor });
+  }
+  
+  status.textContent = 'Done!';
+  output.textContent = JSON.stringify(results, null, 2);
+  
+  // Also output as a compact format for easy copying
+  console.log('=== LEFT RESULTS ===');
+  console.log(JSON.stringify(results));
+  
+  return results;
+}
+
+async function main() {
+  const leftFiles = [
+    'Vector.png', 'Vector-1.png', 'Vector-2.png', 'Vector-3.png',
+    'Vector 86.png', 'Vector 87.png', 'Vector 88.png', 'Vector 89.png',
+    'Vector 90.png', 'Vector 91.png', 'Vector 92.png', 'Vector 93.png',
+    'Vector 94.png', 'Vector 95.png', 'Vector 96.png', 'Vector 97.png',
+    'Vector 98.png', 'Vector 99.png', 'Vector 100.png', 'Vector 101.png'
+  ];
+  
+  const leftResults = await findPositions(
+    '/assets/images/hero/decor-left-top.svg', 401, 892,
+    '/assets/images/hero/decor-left', leftFiles
+  );
+  
+  document.getElementById('output').textContent += '\n\n=== LEFT POSITIONS ===\n';
+  leftResults.forEach(r => {
+    document.getElementById('output').textContent += r.file + ': x=' + r.x + ' y=' + r.y + ' (' + r.matchPct + '% match)\n';
+  });
+  
+  // Now do right
+  const rightFiles = [
+    'Vector.png', 'Vector-1.png', 'Vector-2.png', 'Vector-3.png',
+    'Vector 102.png', 'Vector 103.png', 'Vector 104.png', 'Vector 105.png',
+    'Vector 106.png', 'Vector 107.png', 'Vector 108.png', 'Vector 109.png',
+    'Vector 110.png', 'Vector 111.png', 'Vector 112.png', 'Vector 113.png',
+    'Vector 114.png', 'Vector 115.png', 'Vector 116.png', 'Vector 117.png'
+  ];
+  
+  const rightResults = await findPositions(
+    '/assets/images/hero/decor-right.svg', 384, 884,
+    '/assets/images/hero/decor-right', rightFiles
+  );
+  
+  document.getElementById('output').textContent += '\n\n=== RIGHT POSITIONS ===\n';
+  rightResults.forEach(r => {
+    document.getElementById('output').textContent += r.file + ': x=' + r.x + ' y=' + r.y + ' (' + r.matchPct + '% match)\n';
+  });
+  
+  // Save results to a file via fetch
+  const allResults = { left: leftResults, right: rightResults };
+  document.getElementById('output').textContent += '\n\nFINAL JSON:\n' + JSON.stringify(allResults);
+}
+
+main().catch(e => {
+  document.getElementById('status').textContent = 'Error: ' + e.message;
+  console.error(e);
+});
+</script>
+</body>
+</html>
