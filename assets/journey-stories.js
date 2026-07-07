@@ -7,8 +7,11 @@
  * стрелки по бокам (десктоп) — соседний шаг, свайп вниз — закрыть,
  * долгое нажатие — пауза.
  *
- * Список медиа отдаёт сервер (server.js, /api/journey-media) — он просто
- * сканирует папки, так что новые файлы подхватываются без правки кода.
+ * Список медиа берётся из assets/data/journey-media.json (статический
+ * файл, его пишет server.js при каждом локальном запуске — см. writeStaticManifests
+ * в server.js) — так это работает и на статическом хостинге (Netlify,
+ * GitHub Pages), где server.js вообще не запускается. В локальной
+ * разработке, пока такого файла ещё нет, используется живой /api/journey-media.
  *
  * Оригинальные .j-photo элементы не удаляются, а получают новое содержимое:
  * так сохраняется их «приклеивание» (jStick keyframe в index.html) при
@@ -367,7 +370,15 @@
     style.textContent = CSS;
     document.head.appendChild(style);
 
-    var mediaPromise = fetch('/api/journey-media').then(function (r) { return r.json(); })
+    // На статическом хостинге (Netlify, GitHub Pages) /api/* не отвечает —
+    // там работает только заранее сгенерированный assets/data/journey-media.json
+    // (его пишет server.js при каждом локальном запуске). В разработке, пока
+    // такого файла ещё нет, используем живой /api/journey-media.
+    var mediaPromise = fetch('/assets/data/journey-media.json')
+      .then(function (r) { if (!r.ok) throw new Error('no static manifest'); return r.json(); })
+      .catch(function () {
+        return fetch('/api/journey-media').then(function (r) { return r.json(); });
+      })
       .catch(function () { return {}; });
 
     var tries = 0;

@@ -42,8 +42,12 @@ function readChannel(folder) {
   return items.slice().sort((a, b) => b.mtime - a.mtime);
 }
 
+function readNews() {
+  return { main: readChannel('main'), karaganda: readChannel('karaganda') };
+}
+
 app.get('/api/news', (req, res) => {
-  res.json({ main: readChannel('main'), karaganda: readChannel('karaganda') });
+  res.json(readNews());
 });
 
 // «Стикеры»-сторис в секции «путь кофе»: assets/images/journey/{farms,
@@ -53,14 +57,34 @@ app.get('/api/news', (req, res) => {
 const JOURNEY_DIR = path.join(__dirname, 'assets', 'images', 'journey');
 const JOURNEY_FOLDERS = ['farms', 'selection', 'roasting', 'check', 'coffee'];
 
-app.get('/api/journey-media', (req, res) => {
+function readJourneyMedia() {
   const result = {};
   JOURNEY_FOLDERS.forEach((f) => {
     result[f] = readMediaFolder(JOURNEY_DIR, '/assets/images/journey', f);
   });
-  res.json(result);
+  return result;
+}
+
+app.get('/api/journey-media', (req, res) => {
+  res.json(readJourneyMedia());
 });
 
+// На статических хостингах (Netlify, GitHub Pages и т.п.) этот сервер не
+// запускается — там отдаются только файлы, без /api/*. Поэтому при каждом
+// старте сервера (то есть при каждой локальной проверке перед деплоем)
+// заодно записываем те же самые данные как обычные .json-файлы —
+// фронтенд (news.js, journey-stories.js) сначала пробует их, и только если
+// их нет — стучится в /api/* (это и есть режим локальной разработки).
+const DATA_DIR = path.join(__dirname, 'assets', 'data');
+
+function writeStaticManifests() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(path.join(DATA_DIR, 'news.json'), JSON.stringify(readNews()));
+  fs.writeFileSync(path.join(DATA_DIR, 'journey-media.json'), JSON.stringify(readJourneyMedia()));
+}
+
 app.listen(PORT, () => {
+  writeStaticManifests();
   console.log(`Сайт доступен по адресу: http://localhost:${PORT}`);
+  console.log('Статические assets/data/*.json обновлены — их нужно закоммитить/загрузить вместе с проектом, чтобы медиа работало и на статическом хостинге (Netlify и т.п.).');
 });

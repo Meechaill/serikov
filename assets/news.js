@@ -238,8 +238,16 @@
   }
 
   function boot() { // ждём секцию заявки — встаём сразу после неё
-    var feedPromise = fetch('/api/news')
-      .then(function (r) { return r.json(); })
+    // На статическом хостинге (Netlify, GitHub Pages) сервера с /api/* нет —
+    // там работает только заранее сгенерированный assets/data/news.json
+    // (его пишет server.js при каждом локальном запуске, см. writeStaticManifests
+    // в server.js). Локально в разработке, если файл ещё не создавали, просто
+    // используем живой /api/news.
+    var feedPromise = fetch('/assets/data/news.json')
+      .then(function (r) { if (!r.ok) throw new Error('no static manifest'); return r.json(); })
+      .catch(function () {
+        return fetch('/api/news').then(function (r) { return r.json(); });
+      })
       .catch(function () { return { main: [], karaganda: [] }; });
 
     function whenReady(cb) {
