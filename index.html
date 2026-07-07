@@ -21,17 +21,19 @@
       html, body { margin: 0; background: #f8efe0; }
       /* ===== Экран загрузки =====
          Первая отрисовка бандла и картинок hero занимает пару секунд —
-         вместо пустого/дёргающегося экрана показываем маленькую сцену:
-         в чашку падают зёрна, поднимается пар, кофе прибывает и убывает,
-         будто заваривается прямо на глазах. Скрывает её тот же скрипт,
-         что включает hero-анимацию (#site-loader.is-hiding ниже) — экран
-         не просто гаснет, а «стекает» в чашку через сужающийся clip-path,
-         как будто именно в неё утекает вся сцена, и открывается hero. */
+         вместо пустого/дёргающегося экрана показываем узнаваемый узор
+         сайта: те же яркие треугольники, что обрамляют hero и разделы
+         каталога (цвета из decor-left/right.svg — teal/оранжевый/бордовый/
+         жёлтый), собранные в мандалу вокруг логотипа. Она медленно
+         вращается, а каждый треугольник по очереди «дышит» — бежит
+         цветная волна по кругу. Скрывает заставку тот же скрипт, что
+         включает hero-анимацию (#site-loader.is-hiding ниже) — экран
+         стягивается кольцевым вырезом в центр узора, и открывается hero. */
       #site-loader {
         position: fixed; inset: 0; z-index: 99990; display: flex; align-items: center;
         justify-content: center; overflow: hidden;
         background: radial-gradient(ellipse 70% 60% at 50% 42%, #fffaf0 0%, #f6e9cd 55%, #ecd9b3 100%);
-        clip-path: circle(150% at 50% 56%);
+        clip-path: circle(150% at 50% 52%);
         transition: clip-path .95s cubic-bezier(.65, 0, .35, 1), filter .8s ease, opacity .8s ease;
       }
       #site-loader::before {
@@ -39,31 +41,39 @@
         background-image: radial-gradient(rgba(7,78,47,.05) 1px, transparent 1.5px);
         background-size: 22px 22px;
       }
-      #site-loader.is-hiding { clip-path: circle(0% at 50% 56%); filter: blur(3px); opacity: .4; pointer-events: none; }
+      #site-loader.is-hiding { clip-path: circle(0% at 50% 52%); filter: blur(3px); opacity: .4; pointer-events: none; }
 
-      .sl-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+      .sl-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 26px; }
 
-      /* тёплое сияние позади сцены */
+      /* тёплое сияние позади узора */
       .sl-aura {
-        position: absolute; top: 38%; left: 50%; width: 320px; height: 320px;
-        margin: -160px 0 0 -160px; border-radius: 50%; filter: blur(30px);
-        background: radial-gradient(closest-side, rgba(253,187,3,.22), rgba(7,78,47,.1) 65%, rgba(7,78,47,0));
+        position: absolute; top: 50%; left: 50%; width: 340px; height: 340px;
+        margin: -170px 0 0 -170px; border-radius: 50%; filter: blur(34px);
+        background: radial-gradient(closest-side, rgba(253,187,3,.28), rgba(0,169,187,.12) 60%, rgba(7,78,47,0));
         animation: slGlow 3.2s ease-in-out infinite;
       }
 
-      .sl-cup { position: relative; width: 132px; height: 148px; overflow: visible; }
-      .sl-liquid { transform-box: fill-box; transform-origin: 50% 100%; animation: slFill 2.4s ease-in-out infinite; }
-      .sl-cup-outline { animation: slBob 2.4s ease-in-out infinite; }
+      .sl-stage { position: relative; width: 190px; height: 190px; display: flex; align-items: center; justify-content: center; }
+      .sl-pattern { position: absolute; inset: 0; animation: slSpinSlow 20s linear infinite; }
 
-      .sl-steam path { opacity: 0; stroke-dasharray: 30; stroke-dashoffset: 30; }
-      .sl-steam .s1 { animation: slSteam 2.6s ease-in .1s infinite; }
-      .sl-steam .s2 { animation: slSteam 2.6s ease-in .85s infinite; }
-      .sl-steam .s3 { animation: slSteam 2.6s ease-in 1.6s infinite; }
+      /* каждый треугольник — угол на кольце (--ang) на своём радиусе (--rad),
+         с собственным цветом (--tc) и задержкой (--d), из-за которой волна
+         пульсации бежит по кругу одна за другой */
+      .sl-tri {
+        position: absolute; top: 50%; left: 50%; width: 0; height: 0; margin: -9px 0 0 -9px;
+        border-left: 9px solid transparent; border-right: 9px solid transparent;
+        border-bottom: 18px solid var(--tc);
+        transform: rotate(var(--ang)) translateY(var(--rad)) scale(.7);
+        opacity: .35; filter: drop-shadow(0 3px 6px rgba(0,0,0,.12));
+        animation: slTriPulse 2.4s ease-in-out infinite;
+        animation-delay: var(--d);
+      }
 
-      .sl-bean { opacity: 0; transform-box: fill-box; transform-origin: 50% 50%; }
-      .sl-bean-1 { animation: slBeanFall 1.8s cubic-bezier(.55,0,.85,.35) 0s infinite; }
-      .sl-bean-2 { animation: slBeanFall 1.8s cubic-bezier(.55,0,.85,.35) .6s infinite; }
-      .sl-bean-3 { animation: slBeanFall 1.8s cubic-bezier(.55,0,.85,.35) 1.2s infinite; }
+      .sl-logo {
+        position: relative; width: 44px; height: 58px; z-index: 2;
+        filter: drop-shadow(0 6px 16px rgba(7,78,47,.28));
+        animation: slLogoPulse 2.4s ease-in-out infinite;
+      }
 
       .sl-text {
         position: relative; margin: 0; font-family: 'Geologica', Helvetica, sans-serif;
@@ -73,25 +83,17 @@
       .sl-dots i:nth-child(2) { animation-delay: .18s; }
       .sl-dots i:nth-child(3) { animation-delay: .36s; }
 
-      @keyframes slGlow    { 0%, 100% { opacity: .6; transform: scale(.94); } 50% { opacity: 1; transform: scale(1.08); } }
-      @keyframes slBob     { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-      @keyframes slFill    { 0% { transform: scaleY(.5); } 45% { transform: scaleY(.86); } 100% { transform: scaleY(.58); } }
-      @keyframes slSteam {
-        0%   { opacity: 0; stroke-dashoffset: 30; transform: translateY(0) scaleX(1); }
-        18%  { opacity: .6; }
-        60%  { opacity: .35; }
-        100% { opacity: 0; stroke-dashoffset: 6; transform: translateY(-22px) scaleX(1.5); }
-      }
-      @keyframes slBeanFall {
-        0%   { opacity: 0; transform: translateY(-64px) rotate(-10deg); }
-        10%  { opacity: 1; }
-        78%  { opacity: 1; }
-        92%  { opacity: 0; }
-        100% { opacity: 0; transform: translateY(38px) rotate(35deg); }
+      @keyframes slGlow     { 0%, 100% { opacity: .6; transform: scale(.94); } 50% { opacity: 1; transform: scale(1.08); } }
+      @keyframes slSpinSlow { to { transform: rotate(360deg); } }
+      @keyframes slLogoPulse{ 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+      @keyframes slTriPulse {
+        0%, 100% { opacity: .35; transform: rotate(var(--ang)) translateY(var(--rad)) scale(.7); }
+        45%      { opacity: 1;   transform: rotate(var(--ang)) translateY(var(--rad)) scale(1.2); }
       }
       @keyframes slDot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
       @media (prefers-reduced-motion: reduce) {
-        .sl-aura, .sl-liquid, .sl-cup-outline, .sl-steam path, .sl-bean, .sl-dots i { animation: none; }
+        .sl-aura, .sl-pattern, .sl-tri, .sl-logo, .sl-dots i { animation: none; }
+        .sl-tri { opacity: .85; transform: rotate(var(--ang)) translateY(var(--rad)) scale(1); }
         #site-loader { transition: opacity .4s ease; }
         #site-loader.is-hiding { clip-path: none; opacity: 0; }
       }
@@ -487,6 +489,7 @@
         // сайт (видео, новости) продолжает подгружаться в фоне сам по себе.
         var tries = 0;
         function poll() {
+          if (location.search.indexOf('freezeLoader') !== -1) return; // TEMP DEBUG
           bustDecorSvgs();
           if ((bustedDecor && heroImagesReady()) || ++tries > 160) { start(); return; }
           setTimeout(poll, 50);
@@ -929,44 +932,20 @@
     <div id="site-loader" aria-hidden="true">
       <div class="sl-aura"></div>
       <div class="sl-inner">
-        <svg class="sl-cup" viewBox="0 0 132 148" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <g class="sl-steam" stroke="#8a6a3f" stroke-width="4" stroke-linecap="round">
-            <path class="s1" d="M50 46c-7-9 6-12 0-24"/>
-            <path class="s2" d="M66 42c-7-10 6-13 0-26"/>
-            <path class="s3" d="M82 46c-7-9 6-12 0-24"/>
-          </g>
-          <g class="sl-beans">
-            <g class="sl-bean sl-bean-1">
-              <ellipse cx="40" cy="46" rx="5.5" ry="7.5" fill="#4a2c17"/>
-              <path d="M40 39.5v14" stroke="#2c190c" stroke-width="1.4"/>
-            </g>
-            <g class="sl-bean sl-bean-2">
-              <ellipse cx="66" cy="46" rx="5.5" ry="7.5" fill="#4a2c17"/>
-              <path d="M66 39.5v14" stroke="#2c190c" stroke-width="1.4"/>
-            </g>
-            <g class="sl-bean sl-bean-3">
-              <ellipse cx="92" cy="46" rx="5.5" ry="7.5" fill="#4a2c17"/>
-              <path d="M92 39.5v14" stroke="#2c190c" stroke-width="1.4"/>
-            </g>
-          </g>
-          <g class="sl-cup-outline">
-            <path d="M31 60h70l-6 56a12 12 0 0 1-12 11H49a12 12 0 0 1-12-11L31 60z" fill="#fffdf6" stroke="#074e2f" stroke-width="4.5"/>
-            <path d="M99 68c17-5 25 11 15 22-6 7-16 8-16 8" stroke="#074e2f" stroke-width="4.5" stroke-linecap="round" fill="none"/>
-            <clipPath id="slCupClip">
-              <path d="M33.3 62h63.4l-5.6 51.4a9 9 0 0 1-8.9 8H47.8a9 9 0 0 1-8.9-8L33.3 62z"/>
-            </clipPath>
-            <g clip-path="url(#slCupClip)">
-              <rect class="sl-liquid" x="31" y="62" width="70" height="60" fill="url(#slLiquidGrad)"/>
-            </g>
-          </g>
-          <defs>
-            <linearGradient id="slLiquidGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#c98a42"/>
-              <stop offset="100%" stop-color="#5b3416"/>
-            </linearGradient>
-          </defs>
-        </svg>
-        <p class="sl-text">Завариваем идеальную чашку<span class="sl-dots"><i>.</i><i>.</i><i>.</i></span></p>
+        <div class="sl-stage">
+          <div class="sl-pattern">
+            <i class="sl-tri" style="--ang:0deg;   --rad:-76px; --tc:#00a9bb; --d:0s"></i>
+            <i class="sl-tri" style="--ang:45deg;  --rad:-76px; --tc:#f47822; --d:.15s"></i>
+            <i class="sl-tri" style="--ang:90deg;  --rad:-76px; --tc:#ab1b3f; --d:.3s"></i>
+            <i class="sl-tri" style="--ang:135deg; --rad:-76px; --tc:#fdbb03; --d:.45s"></i>
+            <i class="sl-tri" style="--ang:180deg; --rad:-76px; --tc:#074e2f; --d:.6s"></i>
+            <i class="sl-tri" style="--ang:225deg; --rad:-76px; --tc:#00a9bb; --d:.75s"></i>
+            <i class="sl-tri" style="--ang:270deg; --rad:-76px; --tc:#f47822; --d:.9s"></i>
+            <i class="sl-tri" style="--ang:315deg; --rad:-76px; --tc:#ab1b3f; --d:1.05s"></i>
+          </div>
+          <img class="sl-logo" src="/assets/images/logo-no-text.svg" alt="">
+        </div>
+        <p class="sl-text">Обжариваем страницу<span class="sl-dots"><i>.</i><i>.</i><i>.</i></span></p>
       </div>
     </div>
     <div id="root"></div>
