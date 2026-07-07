@@ -464,21 +464,31 @@
             setTimeout(function () { if (loader.parentNode) loader.remove(); }, 900);
           }
 
-          // два rAF — даём браузеру дорисовать текущий кадр перед стартом
-          requestAnimationFrame(function () {
-            requestAnimationFrame(function () {
-              document.documentElement.classList.add('hero-ready');
-            });
-          });
+          // Даём браузеру дорисовать текущий кадр перед стартом анимации.
+          // requestAnimationFrame для этого не годится: в неактивной/фоновой
+          // вкладке он замораживается браузером и может не сработать вовсе
+          // (страница осталась бы висеть на заставке навсегда) — используем
+          // setTimeout(0..32мс) с fallback, кто быстрее.
+          var goDone = false;
+          function go() {
+            if (goDone) return;
+            goDone = true;
+            document.documentElement.classList.add('hero-ready');
+          }
+          requestAnimationFrame(function () { requestAnimationFrame(go); });
+          setTimeout(go, 32);
         }
 
-        var loaded = document.readyState === 'complete';
-        if (!loaded) window.addEventListener('load', function () { loaded = true; poll(); });
-
+        // Раньше ждали window 'load' — оно срабатывает только когда
+        // ДОСЛОВНО ВСЕ ресурсы страницы догрузятся, включая тяжёлые видео
+        // в секциях «путь кофе» и новостях. На реальном хостинге это могло
+        // держать заставку минуту и больше, хотя самому hero нужны только
+        // его собственные несколько картинок. Ждём только их — остальной
+        // сайт (видео, новости) продолжает подгружаться в фоне сам по себе.
         var tries = 0;
         function poll() {
           bustDecorSvgs();
-          if ((loaded && bustedDecor && heroImagesReady()) || ++tries > 100) { start(); return; }
+          if ((bustedDecor && heroImagesReady()) || ++tries > 160) { start(); return; }
           setTimeout(poll, 50);
         }
         poll();
